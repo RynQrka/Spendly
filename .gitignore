@@ -1,0 +1,51 @@
+# Python caches and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.python-version
+
+# Environment files and secrets
+.env
+.env.*
+secrets/
+
+# Local data and runtime files
+data/
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Docker & Compose artifacts
+docker-compose.override.yml
+
+# Misc
+__pypackages__/
+pip-wheel-metadata/

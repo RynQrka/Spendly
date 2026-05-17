@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Insights — Spendly{% endblock %}
+{% block page_title %}Insights{% endblock %}
+{% block page_subtitle %}AI-generated spending analysis{% endblock %}
+
+{% block head %}
+<style>
+  .insight-card {
+    background: var(--surface);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  .insight-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+  .insight-title {
+    font-weight: 700;
+    font-size: 0.93rem;
+    margin-bottom: 0.3rem;
+  }
+  .insight-body {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  .insight-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 0.4rem;
+    opacity: 0.7;
+  }
+  .insight-type-spike       { border-left: 3px solid var(--danger); }
+  .insight-type-trend       { border-left: 3px solid var(--accent); }
+  .insight-type-recurring   { border-left: 3px solid var(--accent2); }
+  .insight-type-top_merchant{ border-left: 3px solid var(--warning); }
+  .insight-type-pattern     { border-left: 3px solid var(--success); }
+  .insight-type-day_of_week { border-left: 3px solid #ff9f7f; }
+  .insight-type-general     { border-left: 3px solid var(--glass-border); }
+
+  .anomaly-card {
+    background: rgba(255,107,107,0.06);
+    border: 1px solid rgba(255,107,107,0.2);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.88rem;
+  }
+  .anomaly-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    flex-shrink: 0;
+  }
+  .anomaly-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+  .type-icon { display: inline-block; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if anomalies %}
+<div class="section-title" style="margin-bottom:0.75rem;">⚠️ Budget Alerts</div>
+<div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.5rem;">
+  {% for a in anomalies %}
+  <div class="anomaly-card">
+    <div class="anomaly-dot"></div>
+    <div>
+      <div>
+        <span class="fw-bold">{{ a.category }}</span> crossed
+        <span class="text-danger">{{ a.threshold | int }}%</span> of monthly budget
+        in <span class="fw-bold">{{ a.month }}</span>
+      </div>
+      <div class="anomaly-meta">Alerted {{ a.sent_at[:10] if a.sent_at else "" }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="section-title" style="margin-bottom:0.75rem;">💡 Spending Insights</div>
+
+{% if insights %}
+<div style="display:flex; flex-direction:column; gap:0.75rem;">
+  {% for ins in insights %}
+  {% set type_icons = {
+    'spike':        '📈',
+    'trend':        '📉',
+    'recurring':    '🔄',
+    'top_merchant': '🏆',
+    'pattern':      '🧩',
+    'day_of_week':  '📅',
+    'general':      '💡'
+  } %}
+  <div class="insight-card insight-type-{{ ins.insight_type }}">
+    <div class="insight-icon">
+      {{ type_icons.get(ins.insight_type, '💡') }}
+    </div>
+    <div style="flex:1;">
+      <div class="insight-title">{{ ins.title }}</div>
+      <div class="insight-body">{{ ins.body }}</div>
+      <div class="insight-meta">
+        {{ ins.insight_type | replace('_',' ') | title }}
+        {% if ins.category %} · {{ ins.category }}{% endif %}
+        {% if ins.created_at %} · {{ ins.created_at[:10] }}{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="empty">
+    <div class="empty-icon">💡</div>
+    <div class="fw-bold mt-1">No insights yet</div>
+    <div class="text-muted mt-1 small">
+      Ask Spendly on Telegram: <em>"any spending patterns?"</em>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

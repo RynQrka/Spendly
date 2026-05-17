@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Transactions — Spendly{% endblock %}
+
+{% block head %}
+<style>
+  /* Dynamic style utility classes to resolve editor linting issues */
+  .type-tab-btn {
+    padding: 6px 16px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+    color: var(--muted);
+    background: transparent;
+  }
+  .type-tab-all-active { background: var(--accent) !important; color: white !important; }
+  .type-tab-expense-active { background: rgba(255, 107, 107, 0.15) !important; color: #ff6b6b !important; }
+  .type-tab-income-active { background: rgba(81, 207, 102, 0.15) !important; color: #51cf66 !important; }
+  
+  .filter-pill {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .pill-active { background: var(--accent) !important; color: white !important; border-color: var(--accent) !important; }
+  .pill-inactive { background: rgba(255,255,255,0.04) !important; color: var(--muted) !important; border-color: var(--border) !important; }
+
+  .text-income { color: #51cf66 !important; }
+  .text-expense { color: #ff6b6b !important; }
+</style>
+{% endblock %}
+
+{% block page_title %}Transactions{% endblock %}
+{% block page_subtitle %}{{ total }} transaction{{ 's' if total != 1 else '' }}{% endblock %}
+
+{% block topbar_right %}
+<div class="export-row" style="display: flex; gap: 0.5rem;">
+  <a href="{{ url_for('web.export_csv', **{'date_from': date_from or None, 'date_to': date_to or None, 'category': category or None, 'tag': tag or None}) }}"
+     class="export-btn" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+     ↓ CSV
+  </a>
+  <a href="{{ url_for('web.export_pdf', **{'date_from': date_from or None, 'date_to': date_to or None, 'category': category or None, 'tag': tag or None}) }}"
+     class="export-btn export-btn-pdf" style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+     ↓ PDF
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Premium Filters Bar -->
+<div class="filters-bar" style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+  <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem;">
+    <!-- Type Selector Tabs -->
+    <div class="txn-type-tabs" style="display: flex; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 20px; border: 1px solid var(--border);">
+      <a href="{{ url_for('web.transactions', **{'type': 'all', 'category': category or None, 'date_from': date_from or None, 'date_to': date_to or None, 'tag': tag or None}) }}" 
+         class="type-tab-btn {{ 'type-tab-all-active' if (txn_type == 'all' or not txn_type) else '' }}">All</a>
+      <a href="{{ url_for('web.transactions', **{'type': 'expense', 'category': category or None, 'date_from': date_from or None, 'date_to': date_to or None, 'tag': tag or None}) }}" 
+         class="type-tab-btn {{ 'type-tab-expense-active' if txn_type == 'expense' else '' }}">Expenses</a>
+      <a href="{{ url_for('web.transactions', **{'type': 'income', 'category': category or None, 'date_from': date_from or None, 'date_to': date_to or None, 'tag': tag or None}) }}" 
+         class="type-tab-btn {{ 'type-tab-income-active' if txn_type == 'income' else '' }}">Incomes</a>
+    </div>
+
+    <!-- Date Range Picker -->
+    <form method="GET" action="{{ url_for('web.transactions') }}" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+      <input type="hidden" name="type" value="{{ txn_type or 'all' }}">
+      {% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
+      {% if tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
+      <span style="font-size: 0.8rem; color: var(--muted);">Range:</span>
+      <input type="date" name="date_from" value="{{ date_from or '' }}" style="background: rgba(0,0,0,0.2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 0.8rem; outline: none;">
+      <span style="font-size: 0.8rem; color: var(--muted);">to</span>
+      <input type="date" name="date_to" value="{{ date_to or '' }}" style="background: rgba(0,0,0,0.2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 0.8rem; outline: none;">
+      <button type="submit" style="background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid var(--border); padding: 4px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-weight: 600;">Filter</button>
+    </form>
+  </div>
+
+  <!-- Category Quick Pills -->
+  {% if txn_type != 'income' %}
+  <div class="category-pills" style="display: flex; flex-wrap: wrap; gap: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.75rem;">
+    <a href="{{ url_for('web.transactions', **{'type': txn_type, 'date_from': date_from or None, 'date_to': date_to or None, 'tag': tag or None}) }}" 
+       class="filter-pill {{ 'pill-active' if not category else 'pill-inactive' }}">All Categories</a>
+    {% for cat in ['Food', 'Transport', 'Shopping', 'Bills', 'Health', 'Entertainment', 'Other'] %}
+    <a href="{{ url_for('web.transactions', **{'category': cat, 'type': txn_type, 'date_from': date_from or None, 'date_to': date_to or None, 'tag': tag or None}) }}"
+       class="filter-pill {{ 'pill-active' if category == cat else 'pill-inactive' }}">{{ cat }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="card" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); padding: 1.25rem; background: var(--surface);">
+  {% if transactions %}
+  <div class="table-wrap" style="overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Date</th>
+          <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Type</th>
+          <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Merchant / Source</th>
+          <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Category</th>
+          <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Note</th>
+          <th style="text-align: right; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transactions %}
+        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.04); transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.015)'" onmouseout="this.style.backgroundColor='transparent'">
+          <td style="padding: 1rem; color: var(--muted); font-size: 0.88rem;">{{ t.date }} {% if t.time %}<span style="opacity: 0.5; font-size: 0.75rem; margin-left: 2px;">{{ t.time }}</span>{% endif %}</td>
+          <td style="padding: 1rem;">
+            {% if t.type == 'income' %}
+            <span class="badge badge-income" style="background: rgba(81, 207, 102, 0.12); color: #51cf66; font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(81, 207, 102, 0.2); text-transform: uppercase; letter-spacing: 0.5px;">Income</span>
+            {% else %}
+            <span class="badge badge-expense" style="background: rgba(255, 107, 107, 0.12); color: #ff6b6b; font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255, 107, 107, 0.2); text-transform: uppercase; letter-spacing: 0.5px;">Expense</span>
+            {% endif %}
+          </td>
+          <td style="padding: 1rem; font-weight: 600; color: var(--text);">{{ t.merchant or "—" }}</td>
+          <td style="padding: 1rem;">
+            <span class="badge badge-default" style="background: rgba(255,255,255,0.06); color: var(--muted); padding: 3px 8px; border-radius: 6px; font-size: 0.75rem;">
+              {{ t.category }}
+            </span>
+          </td>
+          <td style="padding: 1rem; color: var(--muted); font-size: 0.88rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ t.note or "" }}
+            {% if t.tags %}
+            <span style="display: block; font-size: 0.7rem; color: var(--accent); margin-top: 2px;">🏷️ {{ t.tags }}</span>
+            {% endif %}
+          </td>
+          <td style="padding: 1rem; text-align: right; font-weight: 700; font-size: 0.95rem;" class="{{ 'text-income' if t.type == 'income' else 'text-expense' }}">
+            {% if t.type == 'income' %}+{% else %}-{% endif %} ₹{{ "{:,.2f}".format(t.amount) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <div class="pagination" style="display: flex; justify-content: center; gap: 0.25rem; margin-top: 1.5rem; align-items: center;">
+    {% if page > 1 %}
+    <a href="{{ url_for('web.transactions', **{'page': page - 1, 'type': txn_type or None, 'category': category or None, 'date_from': date_from or None, 'date_to': date_to or None, 'tag': tag or None}) }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); text-decoration: none; color: var(--text); background: rgba(255,255,255,0.02);">←</a>
+    {% endif %}
+    {% for p in range(1, pages + 1) %}
+    {% if p == page %}
+    <span class="current" style="padding: 6px 12px; border-radius: 6px; background: var(--accent); color: white; font-weight: 600;">{{ p }}</span>
+    {% elif p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+    <a href="{{ url_for('web.transactions', **{'page': p, 'type': txn_type or None, 'category': category or None, 'date_from': date_from or None, 'date_to': date_to or None, 'tag': tag or None}) }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); text-decoration: none; color: var(--text); background: rgba(255,255,255,0.02);">{{ p }}</a>
+    {% elif p == page - 3 or p == page + 3 %}
+    <span style="padding: 6px; color: var(--muted);">…</span>
+    {% endif %}
+    {% endfor %}
+    {% if page < pages %}
+    <a href="{{ url_for('web.transactions', **{'page': page + 1, 'type': txn_type or None, 'category': category or None, 'date_from': date_from or None, 'date_to': date_to or None, 'tag': tag or None}) }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); text-decoration: none; color: var(--text); background: rgba(255,255,255,0.02);">→</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty" style="text-align: center; padding: 4rem 2rem; color: var(--muted);">
+    <div class="empty-icon" style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+    No transactions found for the selected filters.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

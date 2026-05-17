@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Subscriptions - Spendly{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom: 2rem;">
+    <h1 style="font-size: 1.85rem; font-weight: 700; margin-bottom: 0.25rem;">Recurring Items</h1>
+    <p style="color: var(--muted); font-size: 0.92rem;">Track your upcoming subscriptions and recurring incomes.</p>
+</div>
+
+<div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+    <!-- Active Recurring -->
+    <div class="card" style="background: linear-gradient(135deg, rgba(124, 106, 247, 0.08), rgba(124, 106, 247, 0.03)); border: 1px solid rgba(124, 106, 247, 0.2); border-radius: 12px; padding: 1.25rem; position: relative; overflow: hidden;">
+        <h3 style="font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Active Recurring</h3>
+        <p class="stat-value" style="font-size: 1.85rem; font-weight: 700; color: var(--accent); margin: 0;">{{ subscriptions | selectattr('is_active', 'equalto', 1) | list | length }}</p>
+    </div>
+    
+    <!-- Monthly Expense Burn -->
+    <div class="card" style="background: linear-gradient(135deg, rgba(255, 107, 107, 0.08), rgba(255, 107, 107, 0.03)); border: 1px solid rgba(255, 107, 107, 0.2); border-radius: 12px; padding: 1.25rem; position: relative; overflow: hidden;">
+        <h3 style="font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Monthly Expense Burn</h3>
+        <p class="stat-value" style="font-size: 1.85rem; font-weight: 700; color: #ff6b6b; margin: 0;">₹{{ subscriptions | selectattr('is_active', 'equalto', 1) | selectattr('transaction_type', 'equalto', 'expense') | map(attribute='amount') | sum | round(2) }}</p>
+    </div>
+    
+    <!-- Monthly Income Expected -->
+    <div class="card" style="background: linear-gradient(135deg, rgba(81, 207, 102, 0.08), rgba(81, 207, 102, 0.03)); border: 1px solid rgba(81, 207, 102, 0.2); border-radius: 12px; padding: 1.25rem; position: relative; overflow: hidden;">
+        <h3 style="font-size: 0.8rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Monthly Income Expected</h3>
+        <p class="stat-value" style="font-size: 1.85rem; font-weight: 700; color: #51cf66; margin: 0;">₹{{ subscriptions | selectattr('is_active', 'equalto', 1) | selectattr('transaction_type', 'equalto', 'income') | map(attribute='amount') | sum | round(2) }}</p>
+    </div>
+</div>
+
+<div class="card" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); padding: 1.5rem; background: var(--surface);">
+    <div style="overflow-x: auto;">
+        <table class="data-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Merchant</th>
+                    <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Amount</th>
+                    <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Billing Schedule</th>
+                    <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Status</th>
+                    <th style="text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.85rem;">Category</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sub in subscriptions %}
+                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.04); transition: background-color 0.2s;">
+                    <td style="padding: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.6rem;">
+                            <strong style="font-size: 0.95rem; font-weight: 600; color: var(--text);">{{ sub.merchant }}</strong>
+                            {% if sub.transaction_type == 'income' %}
+                            <span class="badge" style="background: rgba(81, 207, 102, 0.12); color: #51cf66; font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(81, 207, 102, 0.2); text-transform: uppercase; letter-spacing: 0.5px;">Income</span>
+                            {% else %}
+                            <span class="badge" style="background: rgba(255, 107, 107, 0.12); color: #ff6b6b; font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255, 107, 107, 0.2); text-transform: uppercase; letter-spacing: 0.5px;">Expense</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="padding: 1rem; font-weight: 600; font-size: 0.95rem; color: var(--text);">
+                        ₹{{ "{:,.2f}".format(sub.amount) }}
+                    </td>
+                    <td style="padding: 1rem; color: var(--muted); font-size: 0.88rem;">
+                        {% if sub.frequency == 'yearly' %}
+                        Every year on {{ sub.billing_day or 1 }}/{% if sub.billing_month %}{{ sub.billing_month }}{% else %}12{% endif %}
+                        {% else %}
+                        Day {{ sub.billing_day or 1 }} of every month
+                        {% endif %}
+                    </td>
+                    <td style="padding: 1rem;">
+                        <button class="toggle-btn {% if sub.is_active %}active{% endif %}" 
+                                data-id="{{ sub.id }}" 
+                                data-active="{{ 'true' if sub.is_active else 'false' }}" 
+                                data-type="{{ sub.transaction_type }}"
+                                onclick="toggleSub(this.dataset.id, this.dataset.active === 'true', this.dataset.type)"
+                                style="padding: 5px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s ease;">
+                            {{ "Active" if sub.is_active else "Paused" }}
+                        </button>
+                    </td>
+                    <td style="padding: 1rem;">
+                        <span class="badge badge-default" style="background: rgba(255,255,255,0.06); color: var(--muted); padding: 3px 8px; border-radius: 6px; font-size: 0.75rem;">
+                            {{ sub.category }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 3rem; color: var(--muted); font-size: 0.9rem;">
+                        No subscriptions tracked yet. Tell the bot to log a subscription to see it here!
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+    .toggle-btn {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--muted);
+        border: 1px solid var(--border) !important;
+    }
+    .toggle-btn.active {
+        background: rgba(81, 207, 102, 0.12) !important;
+        color: #51cf66 !important;
+        border: 1px solid rgba(81, 207, 102, 0.3) !important;
+    }
+    .toggle-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .toggle-btn:active {
+        transform: translateY(0);
+    }
+    tr:hover {
+        background-color: rgba(255, 255, 255, 0.015);
+    }
+</style>
+
+<script>
+async function toggleSub(id, currentActive, txnType) {
+    const newState = !currentActive;
+    try {
+        const res = await apiPost('/spendly/api/subscriptions/toggle', { subscription_id: parseInt(id), active: newState, transaction_type: txnType });
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            showToast("Failed to update", "error");
+        }
+    } catch(e) {
+        showToast("Error updating subscription", "error");
+    }
+}
+</script>
+{% endblock %}

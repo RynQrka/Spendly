@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Timeline — Spendly{% endblock %}
+{% block page_title %}Financial Timeline{% endblock %}
+{% block page_subtitle %}12-month spending history{% endblock %}
+
+{% block head %}
+<style>
+  .timeline-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+  .month-card {
+    background: var(--surface);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.2rem;
+    text-decoration: none;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .month-card:hover {
+    border-color: var(--accent);
+    background: rgba(124,106,247,0.04);
+    color: var(--text);
+  }
+  .month-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .month-label  { font-weight: 700; font-size: 0.95rem; }
+  .month-count  { font-size: 0.75rem; color: var(--text-muted); }
+  .month-total  { font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+
+  /* Stacked category bar */
+  .cat-stack {
+    height: 6px;
+    border-radius: 3px;
+    display: flex;
+    overflow: hidden;
+    gap: 1px;
+  }
+  .cat-seg {
+    width: 0;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 0.35s;
+  }
+
+  /* Category legend */
+  .cat-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.6rem;
+  }
+  .cat-leg-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.72rem; color: var(--text-muted); }
+  .cat-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  .no-report-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .max-bar-row {
+    position: relative;
+    height: 56px;
+    margin-bottom: 0.3rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set cat_colors = {
+  'Food':           '#7C6AF7',
+  'Transport':      '#51CF66',
+  'Shopping':       '#FF6B6B',
+  'Bills':          '#FFD43B',
+  'Entertainment':  '#74C0FC',
+  'Health':         '#F78CCF',
+  'Education':      '#FF9F7F',
+  'Personal':       '#A9E34B',
+  'Travel':         '#4DABF7',
+  'Other':          '#868E96',
+} %}
+
+{% if months %}
+{% set max_total = namespace(v=1) %}
+{% for m in months %}
+  {% if m.total > max_total.v %}{% set max_total.v = m.total %}{% endif %}
+{% endfor %}
+
+<!-- Summary stats row -->
+{% set grand_total = namespace(v=0) %}
+{% set grand_income = namespace(v=0) %}
+{% for m in months %}
+  {% set grand_total.v = grand_total.v + m.total %}
+  {% set grand_income.v = grand_income.v + (m.total_income | default(0)) %}
+{% endfor %}
+<div class="grid grid-3 mb-3" style="gap:1rem;">
+  <div class="card">
+    <div class="card-title">Months tracked</div>
+    <div class="card-value text-accent">{{ months | length }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Total Spend (12 mo)</div>
+    <div class="card-value" style="font-size:1.3rem;">₹{{ "{:,.0f}".format(grand_total.v) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Total Income (12 mo)</div>
+    <div class="card-value" style="font-size:1.3rem; color:var(--success);">₹{{ "{:,.0f}".format(grand_income.v) }}</div>
+  </div>
+</div>
+
+<div class="timeline-grid">
+  {% for m in months %}
+  <a class="month-card" href="{{ url_for('web.report_detail', month=m.month) }}">
+    <div class="month-header">
+      <div class="month-label">{{ m.month }}</div>
+      <div class="month-count">{{ m.count }} txns · {{ m.income_count | default(0) }} inc</div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <div class="month-total">₹{{ "{:,.0f}".format(m.total) }}</div>
+      <div class="month-total" style="color:var(--success); font-size:1.2rem;">+₹{{ "{:,.0f}".format(m.total_income | default(0)) }}</div>
+    </div>
+
+    <!-- Category stacked bar -->
+    {% if m.categories %}
+    <div class="cat-stack">
+      {% for c in m.categories %}
+      <div class="cat-seg"
+           data-fill-width="{{ (c.amount / m.total * 100) | round(1) }}"
+           data-fill-color="{{ cat_colors.get(c.category, '#868E96') }}"
+           title="{{ c.category }}: ₹{{ '{:,.0f}'.format(c.amount) }}">
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Legend -->
+    <div class="cat-legend">
+      {% for c in m.categories[:4] %}
+      <div class="cat-leg-item">
+        <div class="cat-dot" data-fill-color="{{ cat_colors.get(c.category, '#868E96') }}"></div>
+        {{ c.category }} <span style="margin-left:2px;font-weight:600;color:var(--text)">₹{{ "{:,.0f}".format(c.amount) }}</span>
+      </div>
+      {% endfor %}
+      {% if m.categories | length > 4 %}
+      <div class="cat-leg-item">+{{ m.categories | length - 4 }} more</div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="card">
+  <div class="empty">
+    <div class="empty-icon">📆</div>
+    <div class="fw-bold mt-1">No spending history yet</div>
+    <div class="text-muted mt-1 small">Start logging expenses on Telegram to see your timeline here.</div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

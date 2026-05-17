@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Projects — Spendly{% endblock %}
+{% block page_title %}Projects{% endblock %}
+{% block page_subtitle %}Tag-based spending analysis{% endblock %}
+
+{% block content %}
+<div class="grid grid-3 mt-1">
+  {% if projects %}
+    {% for p in projects %}
+    <div class="card">
+      <div class="card-title text-accent">{{ p.tag }}</div>
+      <div class="card-value">₹{{ "{:,.0f}".format(p.total) }}</div>
+      <div class="card-sub">{{ p.count }} transaction{{ 's' if p.count != 1 else '' }}</div>
+      
+      {% if p.budget %}
+        <div class="progress-container mt-2">
+            {% set pct = (p.total / p.budget * 100) | round | int %}
+            {% set bar_style = 'style="width: ' ~ ([pct, 100]|min) ~ '%;"' %}
+            <div class="progress-bar {% if pct >= 100 %}bg-danger{% elif pct >= 80 %}bg-warning{% else %}bg-accent{% endif %}" 
+                 {{ bar_style | safe }}></div>
+        </div>
+        <div class="flex justify-between small mt-1 text-muted">
+            <span>{{ pct }}% of ₹{{ "{:,.0f}".format(p.budget) }}</span>
+            <span class="{% if p.total > p.budget %}text-danger{% endif %}">₹{{ "{:,.0f}".format(p.budget - p.total) }} left</span>
+        </div>
+      {% endif %}
+
+      <div class="mt-2 text-right small">
+        <a href="{{ url_for('web.transactions', **{'tag': p.tag}) }}" class="text-muted">View transactions →</a>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="card span-3 text-center py-4">
+      <div class="empty">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🏷️</div>
+        <h3>No projects found</h3>
+        <p class="text-muted">Tag your expenses with hashtags (e.g. #Trip2024 or #Renovation) via Telegram to see them here.</p>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<div class="card mt-4">
+  <div class="section-title">How to use Projects</div>
+  <p>Projects allow you to track spending across different categories for a specific goal or event. Simply add a hashtag to your expense log in Telegram.</p>
+  <div class="mt-2">
+    <code class="p-1 bg-dark rounded">Dinner with friends #EuropeTrip 2500</code>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,743 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Spendly{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}{{ month_label }}{% endblock %}
+
+{% block head %}
+<style>
+  .chart-container { position: relative; height: 300px; width: 100%; }
+  .history-card { grid-column: span 4; }
+  .stat-card-income {
+    background: linear-gradient(135deg, rgba(81, 207, 102, 0.08), rgba(78, 205, 196, 0.05));
+    border: 1px solid rgba(81, 207, 102, 0.25);
+  }
+  .stat-card-net-positive {
+    background: linear-gradient(135deg, rgba(78, 205, 196, 0.08), rgba(78, 205, 196, 0.04));
+    border: 1px solid rgba(78, 205, 196, 0.3);
+  }
+  .stat-card-net-negative {
+    background: linear-gradient(135deg, rgba(255,107,107,0.08), rgba(255,107,107,0.04));
+    border: 1px solid rgba(255,107,107,0.25);
+  }
+  .dist-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .dist-table th { text-align: left; color: var(--muted); font-weight: 500;
+                   padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+  .dist-table td { padding: 0.55rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .dist-table tr.total-row td { border-bottom: none; font-weight: 700; }
+  .dist-table td:last-child, .dist-table th:last-child { text-align: right; }
+  .dist-table .bar-wrap { background: rgba(255,255,255,0.06); border-radius: 3px; height: 5px; margin-top: 3px; }
+  .dist-table .bar-fill { height: 5px; border-radius: 3px; }
+  .budget-ring-wrap { display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; }
+  .budget-ring { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+  .budget-ring svg { transform: rotate(-90deg); }
+  .budget-ring-label { position: absolute; inset: 0; display: flex; align-items: center;
+                        justify-content: center; font-size: 0.75rem; font-weight: 700; }
+  .net-badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 100px;
+               font-size: 0.78rem; font-weight: 600; }
+  .net-pos { background: rgba(81,207,102,0.15); color: #51cf66; }
+  .net-neg { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+  
+  /* Tab styling */
+  .tab-btn {
+    background: rgba(255,255,255,0.05);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+  }
+  .tab-btn.active.expense {
+    background: rgba(255, 107, 107, 0.15);
+    color: #ff6b6b;
+    border-color: #ff6b6b;
+  }
+  .tab-btn.active.income {
+    background: rgba(81, 207, 102, 0.15);
+    color: #51cf66;
+    border-color: #51cf66;
+  }
+  
+  @media (max-width: 1024px) { .history-card { grid-column: span 2; } }
+  @media (max-width: 640px) { .history-card { grid-column: span 1; } }
+
+  /* Dynamic style utility classes to resolve editor linting issues */
+  .text-income { color: #51cf66 !important; }
+  .text-expense { color: #ff6b6b !important; }
+  .text-budget-orange { color: #ffa726 !important; }
+  .text-budget-accent { color: var(--accent) !important; }
+  .text-teal { color: #4ecdc4 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Row 1: Core Financial Summary ── -->
+<div class="grid grid-4 mt-1">
+
+  <!-- Total Spent -->
+  <div class="card">
+    <div class="card-title">Spent — {{ month_label }}</div>
+    <div class="card-value text-accent">₹{{ "{:,.0f}".format(monthly_total) }}</div>
+    <div class="card-sub">{{ monthly_count }} transaction{{ 's' if monthly_count != 1 else '' }}</div>
+    {% if budget and budget > 0 %}
+    <div class="budget-ring-wrap">
+      <div class="budget-ring">
+        {% set pct = [budget_pct or 0, 100] | min %}
+        {% set circumference = 251.2 %}
+        {% set dash = (circumference * pct / 100) | round(1) %}
+        {% set color = '#ff6b6b' if pct >= 100 else '#ffa726' if pct >= 80 else '#7c6af7' %}
+        <svg viewBox="0 0 90 90" width="80" height="80">
+          <circle cx="45" cy="45" r="40" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
+          <circle cx="45" cy="45" r="40" fill="none" stroke="{{ color }}" stroke-width="8"
+                  stroke-dasharray="{{ dash }} {{ circumference }}" stroke-linecap="round"/>
+        </svg>
+        {% set color_class = 'text-expense' if pct >= 100 else 'text-budget-orange' if pct >= 80 else 'text-budget-accent' %}
+        <div class="budget-ring-label {{ color_class }}">{{ pct | round(0) | int }}%</div>
+      </div>
+      <div>
+        <div style="font-size:0.78rem; color:var(--muted)">of ₹{{ "{:,.0f}".format(budget) }} budget</div>
+        {% if forecast_message %}
+        <div style="font-size:0.75rem; color:var(--accent); margin-top:0.3rem">{{ forecast_message }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Income This Month -->
+  <div class="card stat-card-income">
+    <div class="card-title">Income — {{ month_label }}</div>
+    <div class="card-value" style="color:#51cf66">₹{{ "{:,.0f}".format(income_monthly_total) }}</div>
+    <div class="card-sub">{{ income_monthly_count }} credit{{ 's' if income_monthly_count != 1 else '' }}</div>
+  </div>
+
+  <!-- Net (Income - Expenses) -->
+  {% set net = net_monthly_total %}
+  <div class="card {{ 'stat-card-net-positive' if net >= 0 else 'stat-card-net-negative' }}">
+    <div class="card-title">Net Balance</div>
+    <div class="card-value {{ 'text-teal' if net >= 0 else 'text-expense' }}">
+      {{ '+' if net >= 0 else '' }}₹{{ "{:,.0f}".format(net | abs) }}
+    </div>
+    <div class="card-sub">Income minus expenses</div>
+    <div class="mt-2">
+      <span class="net-badge {{ 'net-pos' if net >= 0 else 'net-neg' }}">
+        {{ 'Surplus 🎉' if net >= 0 else 'Deficit ⚠️' }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Weekly + Daily -->
+  <div class="card">
+    <div class="card-title">This Week</div>
+    <div class="card-value">₹{{ "{:,.0f}".format(weekly_total) }}</div>
+    <div class="card-sub">since Monday</div>
+    <div class="mt-2" style="font-size:0.8rem; color:var(--muted)">
+      Daily avg (90d): <strong style="color:var(--text)">₹{{ "{:,.0f}".format(patterns.avg_daily_spend or 0) }}</strong>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 2: Cashflow History Chart (Unified) ── -->
+<div class="grid grid-4 mt-3">
+  <div class="card history-card" style="position: relative;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+      <div class="section-title" id="historyChartTitle">Cashflow History (Current Month)</div>
+    </div>
+    <div class="chart-container mt-2">
+      <canvas id="historyChart"></canvas>
+    </div>
+    
+    <!-- Premium Month-wise Filter Controls -->
+    <div class="chart-filters-container" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-top: 1rem; gap: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.75rem;">
+      <div class="btn-group" style="display: flex; gap: 0.5rem;">
+        <button class="filter-btn active" data-period="1m" style="background: rgba(124, 106, 247, 0.15); color: var(--accent); border: 1px solid var(--accent); padding: 4px 12px; border-radius: 15px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">1M</button>
+        <button class="filter-btn" data-period="3m" style="background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid var(--border); padding: 4px 12px; border-radius: 15px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">3M</button>
+        <button class="filter-btn" data-period="6m" style="background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid var(--border); padding: 4px 12px; border-radius: 15px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">6M</button>
+        <button class="filter-btn" data-period="12m" style="background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid var(--border); padding: 4px 12px; border-radius: 15px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">12M</button>
+      </div>
+      <div class="custom-date-range" style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="font-size: 0.75rem; color: var(--muted);">Custom:</span>
+        <input type="date" id="chartDateFrom" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; font-size: 0.75rem; outline: none;">
+        <span style="font-size: 0.75rem; color: var(--muted);">to</span>
+        <input type="date" id="chartDateTo" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; font-size: 0.75rem; outline: none;">
+        <button id="applyCustomChartFilter" style="background: var(--accent); color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Row 3: Category Breakdown with Expense/Income Toggle ── -->
+<div class="grid grid-2 mt-3">
+
+  <!-- Category Distribution Table Card -->
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+      <div class="category-tabs" style="display: flex; gap: 0.5rem;">
+        <button id="showExpenseCategoryBtn" class="tab-btn active expense">Expenses</button>
+        <button id="showIncomeCategoryBtn" class="tab-btn">Incomes</button>
+      </div>
+      <select id="categoryFilterDropdown" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 0.8rem; outline: none; cursor: pointer;">
+        <option value="">Deep Dive...</option>
+        {% for cat_item in category_totals %}
+        <option value="{{ cat_item.category }}">{{ cat_item.category }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Table Target for dynamic swap -->
+    <div id="categoryTableContainer">
+      <!-- Generated via JS below -->
+    </div>
+  </div>
+
+  <!-- Category Doughnut Card -->
+  <div class="card">
+    <div class="section-title" id="doughnutChartTitle">Category Breakdown (Expenses)</div>
+    <div class="chart-container" style="height:280px; margin-top: 1rem;">
+      <canvas id="categoryChart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 4: Cashflow Sankey + AI Tokens ── -->
+<div class="grid grid-2 mt-3">
+
+  <div class="card">
+    <div class="section-title">Money Flow Map (Sankey)</div>
+    <div style="font-size:0.75rem; color:var(--muted); margin-bottom: 0.5rem;">Visualizing how Income flows to Wallet, Savings, and Categories</div>
+    <div class="chart-container">
+      <canvas id="sankeyChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">AI Token Usage (This Month)</div>
+    <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:var(--muted); font-size:0.85rem;">Input Tokens</span>
+        <strong style="color:#51cf66;">{{ "{:,.0f}".format(token_usage.input) }}</strong>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:var(--muted); font-size:0.85rem;">Output Tokens</span>
+        <strong style="color:#7c6af7;">{{ "{:,.0f}".format(token_usage.output) }}</strong>
+      </div>
+      <div style="border-top:1px solid var(--border); padding-top:0.75rem; display:flex; justify-content:space-between;">
+        <span style="font-weight:600;">Total</span>
+        <strong style="font-size:1.2rem; color:var(--accent);">{{ "{:,.0f}".format(token_usage.total) }}</strong>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 5: Recent Transactions (Unified) ── -->
+<div class="card mt-3">
+  <div class="section-title">Recent Transactions</div>
+  {% if recent_expenses %}
+  <div class="table-wrap mt-2" style="overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 0.5rem; color: var(--muted); font-weight: 500; font-size: 0.85rem; border-bottom: 1px solid var(--border);">Date</th>
+          <th style="text-align: left; padding: 0.5rem; color: var(--muted); font-weight: 500; font-size: 0.85rem; border-bottom: 1px solid var(--border);">Type</th>
+          <th style="text-align: left; padding: 0.5rem; color: var(--muted); font-weight: 500; font-size: 0.85rem; border-bottom: 1px solid var(--border);">Merchant / Source</th>
+          <th style="text-align: left; padding: 0.5rem; color: var(--muted); font-weight: 500; font-size: 0.85rem; border-bottom: 1px solid var(--border);">Category</th>
+          <th style="text-align: right; padding: 0.5rem; color: var(--muted); font-weight: 500; font-size: 0.85rem; border-bottom: 1px solid var(--border);">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in recent_expenses %}
+        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.04);">
+          <td class="text-muted small" style="padding: 0.6rem 0.5rem;">{{ t.date }}</td>
+          <td style="padding: 0.6rem 0.5rem;">
+            {% if t.type == 'income' %}
+            <span style="color: #51cf66; background: rgba(81, 207, 102, 0.12); padding: 1px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 600;">INCOME</span>
+            {% else %}
+            <span style="color: #ff6b6b; background: rgba(255, 107, 107, 0.12); padding: 1px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 600;">EXPENSE</span>
+            {% endif %}
+          </td>
+          <td style="padding: 0.6rem 0.5rem; font-weight: 600;">{{ t.merchant or "—" }}</td>
+          <td style="padding: 0.6rem 0.5rem;">
+            <span class="badge badge-default" style="background: rgba(255,255,255,0.06); color: var(--muted); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">{{ t.category }}</span>
+          </td>
+          <td style="text-align:right; padding: 0.6rem 0.5rem; font-weight: 700;" class="{{ 'text-income' if t.type == 'income' else 'text-expense' }}">
+            {% if t.type == 'income' %}+{% else %}-{% endif %} ₹{{ "{:,.2f}".format(t.amount) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-2 text-right small">
+    <a href="{{ url_for('web.transactions') }}" class="text-accent" style="text-decoration: none; font-weight: 600;">View all transactions →</a>
+  </div>
+  {% else %}
+  <div class="empty">No recent transactions.</div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- JSON payloads -->
+<script id="expense-category-totals" type="application/json">{{ category_totals | tojson }}</script>
+<script id="expense-category-distribution" type="application/json">{{ category_distribution | tojson }}</script>
+<script id="income-totals" type="application/json">{{ income_totals | tojson }}</script>
+<script id="income-distribution" type="application/json">{{ income_distribution | tojson }}</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+    applyChartDefaults();
+
+    // Palettes
+    const EXPENSE_PALETTE = ["#ff6b6b", "#ffa726", "#ffd43b", "#ab47bc", "#42a5f5", "#ec407a", "#d32f2f", "#795548"];
+    const INCOME_PALETTE = ["#51cf66", "#4ecdc4", "#00bfa5", "#00e676", "#1de9b6", "#00acc1", "#33b5e5", "#00c851"];
+
+    // Load data from scripts
+    let expTotals = [], expDist = [], incTotals = [], incDist = [];
+    try {
+        expTotals = JSON.parse(document.getElementById('expense-category-totals').textContent) || [];
+        expDist = JSON.parse(document.getElementById('expense-category-distribution').textContent) || [];
+        incTotals = JSON.parse(document.getElementById('income-totals').textContent) || [];
+        incDist = JSON.parse(document.getElementById('income-distribution').textContent) || [];
+    } catch (e) {
+        console.error("Error parsing JSON data payloads", e);
+    }
+
+    // State
+    let activeTab = 'expense'; // 'expense' or 'income'
+    let doughnutChartInstance = null;
+
+    // Elements
+    const showExpenseBtn = document.getElementById("showExpenseCategoryBtn");
+    const showIncomeBtn = document.getElementById("showIncomeCategoryBtn");
+    const categoryTableContainer = document.getElementById("categoryTableContainer");
+    const doughnutTitle = document.getElementById("doughnutChartTitle");
+
+    // Render Table and Doughnut
+    function updateCategoryView() {
+        if (activeTab === 'expense') {
+            // Render Expense Table
+            if (expDist.length > 0) {
+                const maxVal = Math.max(...expDist.map(d => d.total));
+                const totalSum = expDist.reduce((acc, curr) => acc + curr.total, 0);
+                
+                let html = `<table class="dist-table mt-2">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th style="text-align:right">Amount</th>
+                      <th style="text-align:right">% of Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>`;
+                
+                expDist.slice(0, 6).forEach(item => {
+                    const pct = totalSum > 0 ? ((item.total / totalSum) * 100).toFixed(1) : '0';
+                    const fillPct = maxVal > 0 ? Math.round((item.total / maxVal) * 100) : 0;
+                    html += `<tr>
+                      <td>
+                        <div style="font-weight:600; color:var(--text);">${item.category}</div>
+                        <div style="font-size:0.72rem; color:var(--muted);">${item.where}</div>
+                        <div class="bar-wrap"><div class="bar-fill" style="width:${fillPct}%; background:#ff6b6b;"></div></div>
+                      </td>
+                      <td style="text-align:right; font-weight:600;">₹${item.total.toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                      <td style="text-align:right; color:var(--muted);">${pct}%</td>
+                    </tr>`;
+                });
+                
+                html += `<tr class="total-row">
+                  <td><strong>Total Expenses</strong></td>
+                  <td style="text-align:right; color:#ff6b6b;"><strong>₹${totalSum.toLocaleString('en-IN', {maximumFractionDigits:0})}</strong></td>
+                  <td style="text-align:right;"><strong>100%</strong></td>
+                </tr>
+                </tbody></table>`;
+                categoryTableContainer.innerHTML = html;
+            } else {
+                categoryTableContainer.innerHTML = '<div class="empty mt-2">No expenses this month yet.</div>';
+            }
+
+            // Render Expense Doughnut Chart
+            doughnutTitle.textContent = "Category Breakdown (Expenses)";
+            renderDoughnut(expTotals.map(c => c.category), expTotals.map(c => c.total), EXPENSE_PALETTE, 'expense');
+
+        } else {
+            // Render Income Table
+            if (incDist.length > 0) {
+                const maxVal = Math.max(...incDist.map(d => d.total));
+                const totalSum = incDist.reduce((acc, curr) => acc + curr.total, 0);
+                
+                let html = `<table class="dist-table mt-2">
+                  <thead>
+                    <tr>
+                      <th>Income Source</th>
+                      <th style="text-align:right">Amount</th>
+                      <th style="text-align:right">% of Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>`;
+                
+                incDist.slice(0, 6).forEach(item => {
+                    const pct = totalSum > 0 ? ((item.total / totalSum) * 100).toFixed(1) : '0';
+                    const fillPct = maxVal > 0 ? Math.round((item.total / maxVal) * 100) : 0;
+                    html += `<tr>
+                      <td>
+                        <div style="font-weight:600; color:var(--text);">${item.source}</div>
+                        <div style="font-size:0.72rem; color:var(--muted);">${item.where}</div>
+                        <div class="bar-wrap"><div class="bar-fill" style="width:${fillPct}%; background:#51cf66;"></div></div>
+                      </td>
+                      <td style="text-align:right; font-weight:600;">₹${item.total.toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                      <td style="text-align:right; color:var(--muted);">${pct}%</td>
+                    </tr>`;
+                });
+                
+                html += `<tr class="total-row">
+                  <td><strong>Total Income</strong></td>
+                  <td style="text-align:right; color:#51cf66;"><strong>₹${totalSum.toLocaleString('en-IN', {maximumFractionDigits:0})}</strong></td>
+                  <td style="text-align:right;"><strong>100%</strong></td>
+                </tr>
+                </tbody></table>`;
+                categoryTableContainer.innerHTML = html;
+            } else {
+                categoryTableContainer.innerHTML = '<div class="empty mt-2">No incomes logged this month yet.</div>';
+            }
+
+            // Render Income Doughnut Chart
+            doughnutTitle.textContent = "Income Sources Breakdown";
+            renderDoughnut(incTotals.map(c => c.source), incTotals.map(c => c.total), INCOME_PALETTE, 'income');
+        }
+    }
+
+    function renderDoughnut(labels, data, colors, type) {
+        const catCtx = document.getElementById("categoryChart");
+        if (!catCtx) return;
+
+        if (doughnutChartInstance) {
+            doughnutChartInstance.destroy();
+        }
+
+        if (labels.length === 0) {
+            catCtx.style.display = 'none';
+            let emptyDiv = catCtx.parentElement.querySelector(".empty-chart");
+            if (!emptyDiv) {
+                emptyDiv = document.createElement("div");
+                emptyDiv.className = "empty empty-chart";
+                emptyDiv.style.paddingTop = "4rem";
+                emptyDiv.style.textAlign = "center";
+                emptyDiv.style.color = "var(--muted)";
+                catCtx.parentElement.appendChild(emptyDiv);
+            }
+            emptyDiv.style.display = 'block';
+            emptyDiv.textContent = `No ${type === 'expense' ? 'expense' : 'income'} data available.`;
+            return;
+        }
+
+        catCtx.style.display = 'block';
+        const emptyDiv = catCtx.parentElement.querySelector(".empty-chart");
+        if (emptyDiv) emptyDiv.style.display = 'none';
+
+        doughnutChartInstance = new Chart(catCtx, {
+            type: "doughnut",
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: labels.map((_, i) => colors[i % colors.length]),
+                    borderWidth: 2,
+                    borderColor: "#0f0f13"
+                }]
+            },
+            options: {
+                cutout: "68%",
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'bottom' } },
+                onClick: (evt, elements, chart) => {
+                    if (elements.length > 0 && type === 'expense') {
+                        const label = chart.data.labels[elements[0].index];
+                        window.location.href = `/spendly/category/${encodeURIComponent(label)}`;
+                    }
+                }
+            }
+        });
+    }
+
+    // Toggle switches handlers
+    showExpenseBtn?.addEventListener("click", () => {
+        showExpenseBtn.classList.add("active", "expense");
+        showIncomeBtn.classList.remove("active", "income");
+        activeTab = 'expense';
+        updateCategoryView();
+    });
+
+    showIncomeBtn?.addEventListener("click", () => {
+        showIncomeBtn.classList.add("active", "income");
+        showExpenseBtn.classList.remove("active", "expense");
+        activeTab = 'income';
+        updateCategoryView();
+    });
+
+    // Initial View setup
+    updateCategoryView();
+
+    // ── History Chart ──
+    let historyChartInstance = null;
+
+    async function loadHistoryChart(dateFrom = "", dateTo = "", period = "1m") {
+        try {
+            const params = new URLSearchParams();
+            if (dateFrom) params.append("date_from", dateFrom);
+            if (dateTo) params.append("date_to", dateTo);
+
+            const { history } = await apiGet("/spendly/api/dashboard/charts?" + params.toString());
+            const histCtx = document.getElementById("historyChart");
+            if (!histCtx) return;
+
+            if (historyChartInstance) {
+                historyChartInstance.destroy();
+            }
+
+            if (history && history.length > 0) {
+                const ctx = histCtx.getContext('2d');
+                
+                // Expense Gradient
+                const expGrad = ctx.createLinearGradient(0, 0, 0, 300);
+                expGrad.addColorStop(0, 'rgba(255, 107, 107, 0.25)');
+                expGrad.addColorStop(1, 'rgba(255, 107, 107, 0.00)');
+
+                // Income Gradient
+                const incGrad = ctx.createLinearGradient(0, 0, 0, 300);
+                incGrad.addColorStop(0, 'rgba(81, 207, 102, 0.25)');
+                incGrad.addColorStop(1, 'rgba(81, 207, 102, 0.00)');
+
+                historyChartInstance = new Chart(histCtx, {
+                    type: "line",
+                    data: {
+                        labels: history.map(h => h.label),
+                        datasets: [
+                            {
+                                label: 'Income',
+                                data: history.map(h => h.income),
+                                fill: true,
+                                backgroundColor: incGrad,
+                                borderColor: '#51cf66',
+                                borderWidth: 2.5,
+                                tension: 0.35,
+                                pointRadius: history.length > 40 ? 0.5 : 3,
+                                pointBackgroundColor: '#51cf66',
+                            },
+                            {
+                                label: 'Expense',
+                                data: history.map(h => h.expense),
+                                fill: true,
+                                backgroundColor: expGrad,
+                                borderColor: '#ff6b6b',
+                                borderWidth: 2.5,
+                                tension: 0.35,
+                                pointRadius: history.length > 40 ? 0.5 : 3,
+                                pointBackgroundColor: '#ff6b6b',
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index',
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: "rgba(255, 255, 255, 0.05)" },
+                                ticks: { callback: v => '₹' + v.toLocaleString('en-IN') }
+                            },
+                            x: {
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            } else {
+                histCtx.parentElement.innerHTML = '<div class="empty" style="padding-top:4rem">No history in this period. Start logging transactions!</div>';
+            }
+        } catch (e) {
+            console.error("Failed to load chart history", e);
+        }
+    }
+
+    function toLocalYYYYMMDD(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    function getDateRangeForPeriod(period) {
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        let fromDate, endDate;
+
+        // End date is always the last day of the current month
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        if (period === '1m') {
+            fromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        } else if (period === '3m') {
+            fromDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+            if (fromDate.getFullYear() < currentYear) {
+                fromDate = new Date(currentYear, 0, 1);
+            }
+        } else if (period === '6m') {
+            fromDate = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+            if (fromDate.getFullYear() < currentYear) {
+                fromDate = new Date(currentYear, 0, 1);
+            }
+        } else if (period === '12m') {
+            fromDate = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+        } else {
+            fromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        }
+        return { fromDate, endDate };
+    }
+
+    function formatDateRangeLabel(dFrom, dTo, period) {
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const fDay = dFrom.getDate();
+        const fMonth = months[dFrom.getMonth()];
+        const fYear = dFrom.getFullYear();
+
+        const tDay = dTo.getDate();
+        const tMonth = months[dTo.getMonth()];
+        const tYear = dTo.getFullYear();
+
+        const thisYear = new Date().getFullYear();
+
+        if (period === '1m' && fYear === thisYear && tYear === thisYear) {
+            return `${fDay} ${fMonth} to ${tDay} ${tMonth}`;
+        } else {
+            return `${fDay} ${fMonth} ${fYear} to ${tDay} ${tMonth} ${tYear}`;
+        }
+    }
+
+    // Setup history chart initially (1m)
+    const initRange = getDateRangeForPeriod('1m');
+    const initTitleText = `Cashflow History (${formatDateRangeLabel(initRange.fromDate, initRange.endDate, '1m')})`;
+    document.getElementById("historyChartTitle").textContent = initTitleText;
+    await loadHistoryChart(toLocalYYYYMMDD(initRange.fromDate), toLocalYYYYMMDD(initRange.endDate), '1m');
+
+    // Period buttons click handlers
+    const filterButtons = document.querySelectorAll(".filter-btn");
+    filterButtons.forEach(btn => {
+        btn.addEventListener("click", async () => {
+            filterButtons.forEach(b => {
+                b.classList.remove("active");
+                b.style.background = "rgba(255,255,255,0.05)";
+                b.style.color = "var(--muted)";
+                b.style.borderColor = "var(--border)";
+            });
+            btn.classList.add("active");
+            btn.style.background = "rgba(124, 106, 247, 0.15)";
+            btn.style.color = "var(--accent)";
+            btn.style.borderColor = "var(--accent)";
+
+            const period = btn.dataset.period;
+            const range = getDateRangeForPeriod(period);
+            const titleText = `Cashflow History (${formatDateRangeLabel(range.fromDate, range.endDate, period)})`;
+
+            document.getElementById("historyChartTitle").textContent = titleText;
+            document.getElementById("chartDateFrom").value = "";
+            document.getElementById("chartDateTo").value = "";
+
+            await loadHistoryChart(toLocalYYYYMMDD(range.fromDate), toLocalYYYYMMDD(range.endDate), period);
+        });
+    });
+
+    // Custom Date Range click handler
+    document.getElementById("applyCustomChartFilter")?.addEventListener("click", async () => {
+        const fromVal = document.getElementById("chartDateFrom").value;
+        const toVal = document.getElementById("chartDateTo").value;
+        if (!fromVal || !toVal) {
+            alert("Please select both start and end dates");
+            return;
+        }
+
+        filterButtons.forEach(b => {
+            b.classList.remove("active");
+            b.style.background = "rgba(255,255,255,0.05)";
+            b.style.color = "var(--muted)";
+            b.style.borderColor = "var(--border)";
+        });
+
+        const fParts = fromVal.split('-');
+        const tParts = toVal.split('-');
+        const dFrom = new Date(parseInt(fParts[0]), parseInt(fParts[1]) - 1, parseInt(fParts[2]));
+        const dTo = new Date(parseInt(tParts[0]), parseInt(tParts[1]) - 1, parseInt(tParts[2]));
+
+        document.getElementById("historyChartTitle").textContent = `Cashflow History (${formatDateRangeLabel(dFrom, dTo, 'custom')})`;
+        await loadHistoryChart(fromVal, toVal, 'custom');
+    });
+
+    document.getElementById("categoryFilterDropdown")?.addEventListener("change", (e) => {
+        const cat = e.target.value;
+        if (cat) {
+            window.location.href = `/spendly/category/${encodeURIComponent(cat)}`;
+        }
+    });
+
+    // ── Sankey Cashflow Map ──
+    try {
+        const { sankey } = await apiGet("/spendly/api/dashboard/charts");
+        const sankCtx = document.getElementById("sankeyChart");
+        
+        if (sankey && sankey.length > 0 && sankCtx) {
+            const nodeColors = {
+                "Wallet (Available)": "#7c6af7",
+                "Net Savings": "#51cf66",
+                "Salary": "#51cf66",
+                "Freelance": "#51cf66",
+                "Investments": "#51cf66",
+                "Rent": "#ff6b6b",
+                "Food": "#ff6b6b",
+                "Transport": "#ff6b6b",
+                "Shopping": "#ff6b6b",
+                "Bills": "#ff6b6b",
+                "Health": "#ff6b6b",
+                "Entertainment": "#ff6b6b",
+                "Other": "#ff6b6b"
+            };
+
+            new Chart(sankCtx, {
+                type: "sankey",
+                data: {
+                    datasets: [{
+                        label: 'Cashflow Map',
+                        data: sankey.map(s => ({ from: s.from, to: s.to, flow: s.flow })),
+                        colorFrom: c => {
+                            const node = c.dataset.data[c.dataIndex].from;
+                            return nodeColors[node] || "#888";
+                        },
+                        colorTo: c => {
+                            const node = c.dataset.data[c.dataIndex].to;
+                            return nodeColors[node] || "#ff6b6b";
+                        },
+                        colorMode: 'gradient',
+                        size: 'max'
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        } else if (sankCtx) {
+            sankCtx.parentElement.innerHTML = '<div class="empty" style="padding-top:4rem">No active Cashflow flows found for this month yet.</div>';
+        }
+    } catch (e) {
+        console.error("Failed to load Sankey flow chart", e);
+    }
+});
+</script>
+{% endblock %}

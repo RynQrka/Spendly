@@ -1,0 +1,78 @@
+x-common-env: &common-env
+  DB_PATH: /app/data/expense.db
+  GDRIVE_OAUTH_CLIENT_PATH: /app/secrets/gcp/spendlygcpoauth.json
+  GDRIVE_OAUTH_TOKEN_PATH: /app/secrets/gcp/token.json
+
+services:
+
+  bot:
+    image: adityagarasangi0/spendly:v2.0
+    container_name: spendly_bot
+    restart: always
+    command: ["/app/.venv/bin/python", "-m", "spendly"]
+    volumes:
+      - spendly_data:/app/data
+      - ./secrets/gcp:/app/secrets/gcp
+    env_file: .env
+    environment:
+      <<: *common-env
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    image: adityagarasangi0/spendly:v2.0
+    container_name: spendly_web
+    restart: always
+    command: ["/app/.venv/bin/gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "spendly.web.app:create_app()"]
+    expose:
+      - "8080"
+    volumes:
+      - spendly_data:/app/data
+      - ./secrets/gcp:/app/secrets/gcp:ro
+    env_file: .env
+    environment:
+      <<: *common-env
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: spendly_nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  spendly_data:
+    name: spendly_persistent_data

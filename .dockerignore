@@ -1,0 +1,35 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.orig
+.venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# --- Project Specific ---
+tests/
+scratch/
+secrets/
+data/
+*.db
+*.db-wal
+*.db-shm
+logs/
+
+# --- Docker ---
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# --- OS/IDE ---
+.git/
+.github/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

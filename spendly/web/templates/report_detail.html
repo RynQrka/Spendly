@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}{{ month }} — Spendly{% endblock %}
+{% block page_title %}{{ month }}{% endblock %}
+{% block page_subtitle %}Monthly Financial Report{% endblock %}
+{% block topbar_right %}
+<div style="display:flex; align-items:center; gap:0.75rem;">
+  <a href="{{ url_for('web.reports') }}" class="small text-muted">← All Reports</a>
+  <div class="export-row">
+    <a href="{{ url_for('web.export_csv', **{'from': report.report_data.get('date_from', ''), 'to': report.report_data.get('date_to', '')}) }}"
+       class="export-btn">↓ CSV</a>
+    <a href="{{ url_for('web.export_pdf', **{'from': report.report_data.get('date_from', ''), 'to': report.report_data.get('date_to', '')}) }}"
+       class="export-btn export-btn-pdf">↓ PDF</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  @media (max-width: 900px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .stat-row { grid-template-columns: 1fr; } }
+
+  .pct-badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .pct-up   { background: rgba(255,107,107,0.15); color: var(--danger); }
+  .pct-down { background: rgba(81,207,102,0.15);  color: var(--success); }
+  .pct-flat { background: rgba(136,136,160,0.15); color: var(--text-muted); }
+
+  .cat-bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; }
+  .cat-bar-label { min-width: 90px; font-size: 0.83rem; }
+  .cat-bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--glass-border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .cat-bar-fill {
+    width: 0;
+    height: 100%;
+    border-radius: 4px;
+    background: var(--accent);
+    transition: width 0.5s;
+  }
+  .cat-bar-amt { min-width: 70px; text-align: right; font-size: 0.83rem; font-weight: 600; }
+  .cat-bar-pct { min-width: 38px; text-align: right; font-size: 0.75rem; color: var(--text-muted); }
+
+  .merch-row { display: flex; justify-content: space-between; align-items: center;
+               padding: 0.5rem 0; border-bottom: 1px solid rgba(42,42,58,0.5); }
+  .merch-row:last-child { border-bottom: none; }
+  .merch-name { font-weight: 600; }
+  .merch-meta { font-size: 0.78rem; color: var(--text-muted); }
+
+  .obs-item {
+    padding: 0.5rem 0.75rem;
+    background: rgba(124,106,247,0.06);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .dow-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.4rem; }
+  .dow-col { text-align: center; }
+  .dow-label { font-size: 0.65rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+  .dow-bar-wrap { height: 60px; display: flex; align-items: flex-end; justify-content: center; }
+  .dow-bar {
+    width: 100%;
+    height: 0;
+    background: var(--accent);
+    border-radius: 3px 3px 0 0;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+    min-height: 4px;
+  }
+  .dow-bar:hover { opacity: 1; }
+  .dow-amt { font-size: 0.65rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+  .section-header {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 1.5rem 0 0.75rem;
+  }
+
+  .summary-text {
+    font-size: 0.95rem;
+    line-height: 1.8;
+    color: var(--text);
+    padding: 1.25rem;
+    background: rgba(124,106,247,0.05);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--accent);
+    font-style: italic;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set rd = report.report_data %}
+
+<!-- Telegram summary -->
+{% if report.telegram_summary %}
+<div class="summary-text">{{ report.telegram_summary }}</div>
+{% endif %}
+
+<!-- Stats row -->
+<div class="stat-row mt-3">
+  <div class="card">
+    <div class="card-title">Total Income</div>
+    <div class="card-value" style="color:var(--success);">₹{{ "{:,.0f}".format(rd.total_income | default(0)) }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Total Spend</div>
+    <div class="card-value text-accent">₹{{ "{:,.0f}".format(report.total_spend) }}</div>
+    {% if rd.vs_last_month_pct is defined and rd.vs_last_month_pct != 0 %}
+    <div class="card-sub mt-1">
+      <span class="pct-badge {{ 'pct-up' if rd.vs_last_month_pct > 0 else 'pct-down' }}">
+        {{ '+' if rd.vs_last_month_pct > 0 else '' }}{{ rd.vs_last_month_pct }}%
+      </span>
+      vs last month
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Net Savings</div>
+    <div class="card-value" style="color:var(--success);">
+      ₹{{ "{:,.0f}".format(rd.net_savings | default(0)) }}
+    </div>
+    <div class="card-sub mt-1">
+      <span class="pct-badge pct-down" style="font-size: 0.8rem;">
+        {{ rd.savings_rate | default(0) }}% Rate
+      </span>
+    </div>
+  </div>
+
+  {% if rd.biggest_expense %}
+  <div class="card">
+    <div class="card-title">Biggest Expense</div>
+    <div class="card-value" style="font-size:1.3rem;">
+      ₹{{ "{:,.0f}".format(rd.biggest_expense.amount) }}
+    </div>
+    <div class="card-sub">
+      {{ rd.biggest_expense.merchant or rd.biggest_expense.category }}
+      · {{ rd.biggest_expense.date or rd.biggest_expense.expense_date or "" }}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Income breakdown -->
+{% if rd.income_breakdown and rd.income_breakdown | length > 0 %}
+<div class="section-header">Income by Source</div>
+<div class="card" style="border-left: 3px solid var(--success);">
+  {% set max_inc = rd.income_breakdown[0].amount if rd.income_breakdown else 1 %}
+  {% for c in rd.income_breakdown %}
+  <div class="cat-bar-row">
+    <div class="cat-bar-label">{{ c.source }}</div>
+    <div class="cat-bar-track">
+      <div class="cat-bar-fill" style="background: var(--success);" data-fill-width="{{ (c.amount / max_inc * 100) | round(1) }}"></div>
+    </div>
+    <div class="cat-bar-amt">₹{{ "{:,.0f}".format(c.amount) }}</div>
+    <div class="cat-bar-pct">{{ c.pct }}%</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Category breakdown -->
+{% if rd.category_breakdown %}
+<div class="section-header">Spending by Category</div>
+<div class="card">
+  {% set max_cat = rd.category_breakdown[0].amount if rd.category_breakdown else 1 %}
+  {% for c in rd.category_breakdown %}
+  <div class="cat-bar-row">
+    <div class="cat-bar-label">{{ c.category }}</div>
+    <div class="cat-bar-track">
+      <div class="cat-bar-fill" data-fill-width="{{ (c.amount / max_cat * 100) | round(1) }}"></div>
+    </div>
+    <div class="cat-bar-amt">₹{{ "{:,.0f}".format(c.amount) }}</div>
+    <div class="cat-bar-pct">{{ c.pct }}%</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Top merchants + Day of week -->
+<div class="grid grid-2 mt-3" style="gap:1rem">
+
+  {% if rd.top_merchants %}
+  <div class="card">
+    <div class="section-title">Top Merchants</div>
+    {% for m in rd.top_merchants %}
+    <div class="merch-row">
+      <div>
+        <div class="merch-name">{{ m.merchant }}</div>
+        {% if m.count %}
+        <div class="merch-meta">{{ m.count }} transaction{{ 's' if m.count != 1 else '' }}</div>
+        {% endif %}
+      </div>
+      <div class="fw-bold">₹{{ "{:,.0f}".format(m.amount) }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Day of week heatmap -->
+  {% if rd.day_of_week_totals %}
+  <div class="card">
+    <div class="section-title">Spend by Day of Week</div>
+    {% set days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+    {% set day_keys = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+    {% set max_dow = namespace(v=1) %}
+    {% for k in day_keys %}
+      {% if rd.day_of_week_totals[k] is defined and rd.day_of_week_totals[k] > max_dow.v %}
+        {% set max_dow.v = rd.day_of_week_totals[k] %}
+      {% endif %}
+    {% endfor %}
+    <div class="dow-grid">
+      {% for i in range(7) %}
+      {% set k = day_keys[i] %}
+      {% set v = rd.day_of_week_totals.get(k, 0) if rd.day_of_week_totals else 0 %}
+      <div class="dow-col">
+        <div class="dow-label">{{ days[i] }}</div>
+        <div class="dow-bar-wrap">
+          <div class="dow-bar" data-fill-height="{{ ((v / max_dow.v) * 100) | round }}"></div>
+        </div>
+        {% if v > 0 %}
+        <div class="dow-amt">₹{{ "{:,.0f}".format(v) }}</div>
+        {% else %}
+        <div class="dow-amt">—</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Recurring -->
+{% if rd.recurring_detected and rd.recurring_detected | length > 0 %}
+<div class="section-header">Recurring Detected</div>
+<div class="card">
+  {% for r in rd.recurring_detected %}
+  <div class="merch-row">
+    <div class="merch-name">{{ r.merchant }}</div>
+    <div class="merch-meta">{{ r.count }} times this month</div>
+    {% if r.amount is defined %}
+    <div class="fw-bold">₹{{ "{:,.0f}".format(r.amount) }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Gemini observations -->
+{% if rd.gemini_observations and rd.gemini_observations | length > 0 %}
+<div class="section-header">Observations</div>
+<div>
+  {% for obs in rd.gemini_observations %}
+  <div class="obs-item">{{ obs }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Weekly totals -->
+{% if rd.weekly_totals and rd.weekly_totals | length > 0 %}
+<div class="section-header">Weekly Breakdown</div>
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Week</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>
+        {% for w in rd.weekly_totals %}
+        <tr>
+          <td class="text-muted">{{ w.week }}</td>
+          <td style="text-align:right" class="fw-bold">₹{{ "{:,.0f}".format(w.amount) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

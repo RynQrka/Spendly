@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}{{ detail.category }} — Spendly{% endblock %}
+{% block page_title %}{{ detail.category }}{% endblock %}
+{% block page_subtitle %}Category deep-dive · {{ detail.date_from }} to {{ detail.date_to }}{% endblock %}
+{% block topbar_right %}
+<a href="{{ url_for('web.home') }}" class="small text-muted">← Dashboard</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .merch-bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+  .merch-bar-label { min-width: 110px; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .merch-bar-track { flex: 1; height: 7px; background: var(--glass-border); border-radius: 4px; overflow: hidden; }
+  .merch-bar-fill  { width: 0; height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.5s; }
+  .month-bar-fill  { width: 0; height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.35s; }
+  .merch-bar-amt   { min-width: 70px; text-align: right; font-size: 0.82rem; font-weight: 600; }
+  .merch-bar-cnt   { min-width: 45px; text-align: right; font-size: 0.72rem; color: var(--text-muted); }
+
+  .month-row { display: flex; justify-content: space-between; align-items: center;
+               padding: 0.45rem 0; border-bottom: 1px solid rgba(42,42,58,0.5); }
+  .month-row:last-child { border-bottom: none; }
+
+  .exp-table-wrap { max-height: 400px; overflow-y: auto; }
+  table.exp-table  { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  table.exp-table th { padding: 0.4rem 0.6rem; font-size: 0.7rem; text-transform: uppercase;
+                        letter-spacing: 0.06em; color: var(--text-muted); text-align: left;
+                        border-bottom: 1px solid var(--glass-border); position: sticky; top: 0;
+                        background: var(--surface); z-index: 1; }
+  table.exp-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(42,42,58,0.4); }
+  table.exp-table tr:last-child td { border-bottom: none; }
+  table.exp-table tr:hover td { background: rgba(124,106,247,0.04); }
+  .amount-col { text-align: right; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stat cards -->
+<div class="grid grid-3 mb-3" style="gap:1rem;">
+  <div class="card">
+    <div class="card-title">Total (90 days)</div>
+    <div class="card-value text-accent">₹{{ "{:,.0f}".format(detail.total) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Transactions</div>
+    <div class="card-value">{{ detail.count }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Daily average</div>
+    <div class="card-value" style="font-size:1.3rem;">₹{{ "{:,.0f}".format(detail.daily_avg) }}</div>
+  </div>
+</div>
+
+{% if detail.biggest %}
+<div class="card mb-3">
+  <div class="card-title">Biggest expense</div>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.5rem;">
+    <div>
+      <div class="fw-bold">{{ detail.biggest.merchant or detail.category }}</div>
+      <div class="text-muted small">{{ detail.biggest.expense_date }}</div>
+    </div>
+    <div class="card-value text-accent" style="font-size:1.4rem;">₹{{ "{:,.0f}".format(detail.biggest.amount) }}</div>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid grid-2" style="gap:1rem; margin-bottom:1rem;">
+
+  <!-- Merchant breakdown -->
+  {% if detail.merchants %}
+  <div class="card">
+    <div class="section-title mb-2">By Merchant</div>
+    {% set max_merch = detail.merchants[0].amount if detail.merchants else 1 %}
+    {% for m in detail.merchants[:8] %}
+    <div class="merch-bar-row">
+      <div class="merch-bar-label" title="{{ m.merchant }}">{{ m.merchant }}</div>
+      <div class="merch-bar-track">
+        <div class="merch-bar-fill" data-fill-width="{{ (m.amount / max_merch * 100) | round(1) }}"></div>
+      </div>
+      <div class="merch-bar-amt">₹{{ "{:,.0f}".format(m.amount) }}</div>
+      <div class="merch-bar-cnt">×{{ m.count }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Monthly breakdown -->
+  {% if detail.monthly %}
+  <div class="card">
+    <div class="section-title mb-2">By Month</div>
+    {% set max_month = namespace(v=1) %}
+    {% for month, amt in detail.monthly.items() %}
+      {% if amt > max_month.v %}{% set max_month.v = amt %}{% endif %}
+    {% endfor %}
+    {% for month, amt in detail.monthly.items() | sort(reverse=True) %}
+    <div class="month-row">
+      <div class="text-muted small">{{ month }}</div>
+      <div style="flex:1; margin: 0 0.6rem; height:4px; background:var(--glass-border); border-radius:2px; overflow:hidden;">
+        <div class="month-bar-fill" data-fill-width="{{ (amt / max_month.v * 100) | round }}"></div>
+      </div>
+      <div class="fw-bold small">₹{{ "{:,.0f}".format(amt) }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Full transaction list -->
+{% if detail.expenses %}
+<div class="card">
+  <div class="section-title mb-2">All Transactions ({{ detail.count }})</div>
+  <div class="exp-table-wrap">
+    <table class="exp-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Merchant</th>
+          <th>Note</th>
+          <th class="amount-col">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in detail.expenses %}
+        <tr>
+          <td class="text-muted">{{ e.expense_date }}</td>
+          <td class="fw-bold">{{ e.merchant or '—' }}</td>
+          <td class="text-muted small">{{ e.note or '' }}</td>
+          <td class="amount-col">₹{{ "{:,.0f}".format(e.amount) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

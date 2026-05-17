@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Archives {{ year }} — Spendly{% endblock %}
+{% block page_title %}Archives {{ year }}{% endblock %}
+{% block page_subtitle %}Historical expense data · expense{{ year }}.db{% endblock %}
+{% block topbar_right %}
+<a href="{{ url_for('web.timeline') }}" class="small text-muted">← Timeline</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  table.arch-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.arch-table th {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-align: left;
+    border-bottom: 1px solid var(--glass-border);
+  }
+  table.arch-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(42,42,58,0.4);
+  }
+  table.arch-table tr:last-child td { border-bottom: none; }
+  table.arch-table tr:hover td { background: rgba(124,106,247,0.04); }
+  .amt-col { text-align: right; font-weight: 600; }
+  .badge-cat {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    background: rgba(124,106,247,0.12);
+    color: var(--accent);
+  }
+  .year-nav { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .year-btn {
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    background: none;
+    transition: all 0.15s;
+  }
+  .year-btn:hover, .year-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(124,106,247,0.07);
+  }
+  .year-btn.active { font-weight: 700; }
+  .year-btn.has-data { border-color: rgba(124,106,247,0.3); color: var(--text); }
+  .year-btn.no-data  { opacity: 0.45; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+
+<!-- Year navigation: all years since 2020, highlight ones with actual archive files -->
+<div class="year-nav">
+  {% for y in range(2020, current_year) %}
+  <a class="year-btn{{ ' active' if y == year else '' }}{{ ' has-data' if y in avail_years else ' no-data' }}"
+     href="{{ url_for('web.archives', year=y) }}"
+     title="{{ 'Archive exists' if y in avail_years else 'No archive for this year' }}">
+    {{ y }}{% if y in avail_years %} ✦{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+{% if expenses %}
+<!-- Summary stats from pre-computed summary variable -->
+<div class="grid grid-3 mb-3" style="gap:1rem;">
+  <div class="card">
+    <div class="card-title">Total {{ year }}</div>
+    <div class="card-value text-accent">₹{{ "{:,.0f}".format(summary.total) }}</div>
+    {% if summary.avg_monthly %}
+    <div class="card-sub">~₹{{ "{:,.0f}".format(summary.avg_monthly) }} / month</div>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="card-title">Transactions</div>
+    <div class="card-value">{{ summary.count }}</div>
+    {% if summary.months_active %}
+    <div class="card-sub">across {{ summary.months_active }} month{{ 's' if summary.months_active != 1 else '' }}</div>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="card-title">Top merchant</div>
+    <div class="card-value small fw-bold">{{ summary.top_merchant or '—' }}</div>
+    <div class="card-sub">expense{{ year }}.db</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-title mb-2">{{ year }} Transactions</div>
+  <div style="max-height:500px; overflow-y:auto;">
+    <table class="arch-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Merchant</th>
+          <th>Category</th>
+          <th class="amt-col">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in expenses %}
+        <tr>
+          <td class="text-muted">{{ e.expense_date }}</td>
+          <td class="fw-bold">{{ e.merchant or '—' }}</td>
+          <td><span class="badge-cat">{{ e.category }}</span></td>
+          <td class="amt-col">₹{{ "{:,.0f}".format(e.amount) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="card">
+  <div class="empty">
+    <div class="empty-icon">🗄️</div>
+    <div class="fw-bold mt-1">No archive data for {{ year }}</div>
+    <div class="text-muted mt-1 small">
+      The archive file <code>expense{{ year }}.db</code> doesn't exist yet.<br>
+      Archives are created automatically at the end of each year.
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{% block title %}Spendly{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Shared stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/spendly.css') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon-192.png') }}" type="image/png">
+  <meta name="theme-color" content="#10b981">
+
+  <!-- Per-page overrides / additions -->
+  {% block head %}{% endblock %}
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}")
+          .then(reg => console.log('SW registered!', reg))
+          .catch(err => console.log('SW failed!', err));
+      });
+    }
+  </script>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">💸 Spendly</div>
+      <button type="button" class="close-menu" aria-label="Close menu">✕</button>
+    </div>
+    <nav>
+      <a href="{{ url_for('web.dashboard') }}"
+         class="{{ 'active' if request.path in [url_for('web.dashboard'), url_for('web.home')] else '' }}">
+        <span class="icon">📊</span> Dashboard
+      </a>
+      <a href="{{ url_for('web.transactions') }}"
+         class="{{ 'active' if request.path.startswith(url_for('web.transactions')) else '' }}">
+        <span class="icon">📋</span> Transactions
+      </a>
+      <a href="{{ url_for('web.reports') }}"
+         class="{{ 'active' if request.path.startswith(url_for('web.reports')) else '' }}">
+        <span class="icon">📅</span> Reports
+      </a>
+      <a href="{{ url_for('web.timeline') }}"
+         class="{{ 'active' if request.path.startswith(url_for('web.timeline')) else '' }}">
+        <span class="icon">📆</span> Timeline
+      </a>
+      <a href="{{ url_for('web.insights') }}"
+         class="{{ 'active' if request.path.startswith(url_for('web.insights')) else '' }}">
+        <span class="icon">💡</span> Insights
+      </a>
+      <a href="{{ url_for('web.subscriptions') }}"
+         class="{{ 'active' if request.path == url_for('web.subscriptions') else '' }}">
+        <span class="icon">🔄</span> Subscriptions
+      </a>
+      <a href="{{ url_for('web.merchants') }}"
+         class="{{ 'active' if request.path.startswith(url_for('web.merchants')) else '' }}">
+        <span class="icon">🏪</span> Merchants
+      </a>
+      <a href="{{ url_for('web.projects') }}"
+         class="{{ 'active' if request.path.startswith(url_for('web.projects')) else '' }}">
+        <span class="icon">🏷️</span> Projects
+      </a>
+      <a href="{{ url_for('web.chat') }}"
+         class="{{ 'active' if request.path.startswith(url_for('web.chat')) else '' }}">
+        <span class="icon">💬</span> Chat
+      </a>
+    </nav>
+  </aside>
+  <div class="nav-backdrop" id="navBackdrop"></div>
+
+  <!-- ── Main ── -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Open navigation">☰</button>
+        <div>
+          <h1>{% block page_title %}Spendly{% endblock %}</h1>
+          <div class="subtitle">{% block page_subtitle %}{% endblock %}</div>
+        </div>
+      </div>
+      {% block topbar_right %}{% endblock %}
+    </div>
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Shared JS -->
+<script src="{{ url_for('static', filename='js/spendly.js') }}"></script>
+<!-- Visualization Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.12.0/dist/chartjs-chart-sankey.min.js"></script>
+
+<!-- Per-page scripts -->
+{% block scripts %}{% endblock %}
+</body>
+</html>

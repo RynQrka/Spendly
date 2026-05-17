@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Merchants — Spendly{% endblock %}
+{% block page_title %}Merchant Memory{% endblock %}
+{% block page_subtitle %}Auto-learned category mappings (read-only — correct via Telegram){% endblock %}
+
+{% block head %}
+<style>
+  .merch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+  .merch-tile {
+    background: var(--surface);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    transition: border-color 0.15s;
+  }
+  .merch-tile:hover { border-color: rgba(124,106,247,0.4); }
+  .merch-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: rgba(124,106,247,0.12);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .merch-name { font-weight: 700; font-size: 0.9rem; }
+  .merch-cat { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+  .merch-hits {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .hits-num { font-weight: 700; color: var(--text); font-size: 0.88rem; }
+  .read-only-note {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    background: rgba(255,212,59,0.07);
+    border: 1px solid rgba(255,212,59,0.2);
+    border-radius: var(--radius);
+    font-size: 0.82rem;
+    color: var(--warning);
+    margin-bottom: 1.25rem;
+  }
+  .search-row {
+    margin-bottom: 1rem;
+  }
+  .search-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.9rem;
+    color: var(--text);
+    font-size: 0.88rem;
+    width: 280px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="read-only-note">
+  ⚠️ Read-only view. To correct a merchant's category, tell Spendly on Telegram:
+  <em style="margin-left:0.3rem;">"that Swiggy was Entertainment not Food"</em>
+</div>
+
+{% if merchants %}
+<div class="search-row">
+  <input class="search-input" type="text" id="search" placeholder="Search merchants…" oninput="filterMerchants(this.value)">
+</div>
+
+<div class="merch-grid" id="merch-grid">
+  {% for m in merchants %}
+  <div class="merch-tile" data-name="{{ m.merchant | lower }}">
+    <div class="merch-avatar">{{ m.merchant[0] | upper }}</div>
+    <div>
+      <div class="merch-name">{{ m.merchant }}</div>
+      <div class="merch-cat">
+        <span class="badge badge-{{ m.category | lower | replace(' ','-') }} badge-default">
+          {{ m.category }}
+        </span>
+      </div>
+    </div>
+    <div class="merch-hits">
+      <div class="hits-num">{{ m.occurrence_count }}</div>
+      <div>log{{ 's' if m.occurrence_count != 1 else '' }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<div id="no-results" class="empty" style="display:none; padding:2rem;">
+  No merchants match that search.
+</div>
+{% else %}
+<div class="card">
+  <div class="empty">
+    <div class="empty-icon">🏪</div>
+    <div class="fw-bold mt-1">No merchant memory yet</div>
+    <div class="text-muted mt-1 small">
+      Spendly learns merchant categories automatically as you log expenses.
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterMerchants(q) {
+  const query = q.toLowerCase().trim();
+  const tiles = document.querySelectorAll('.merch-tile');
+  let visible = 0;
+  tiles.forEach(t => {
+    const match = !query || t.dataset.name.includes(query);
+    t.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const noRes = document.getElementById('no-results');
+  if (noRes) noRes.style.display = visible === 0 ? 'block' : 'none';
+}
+</script>
+{% endblock %}

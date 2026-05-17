@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Spendly{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block head %}
+<style>
+  .error-wrap {
+    display:         flex;
+    flex-direction:  column;
+    align-items:     center;
+    justify-content: center;
+    min-height:      60vh;
+    text-align:      center;
+    gap:             0.75rem;
+  }
+  .error-code {
+    font-size:   4rem;
+    font-weight: 800;
+    color:       var(--glass-border);
+    line-height: 1;
+  }
+  .error-icon  { font-size: 2.5rem; }
+  .error-title { font-size: 1.2rem; font-weight: 700; margin-top: 0.25rem; }
+  .error-msg   { color: var(--text-muted); font-size: 0.9rem; max-width: 420px; line-height: 1.6; }
+  .error-links { display: flex; gap: 0.75rem; margin-top: 0.5rem; flex-wrap: wrap; justify-content: center; }
+  .error-links a {
+    padding:       0.4rem 1rem;
+    border:        1px solid var(--glass-border);
+    border-radius: var(--radius);
+    font-size:     0.85rem;
+    color:         var(--text-muted);
+    transition:    all 0.15s;
+  }
+  .error-links a:hover { border-color: var(--accent); color: var(--accent); opacity: 1; }
+  .error-links a.primary {
+    background:   var(--accent);
+    border-color: var(--accent);
+    color:        #fff;
+  }
+  .error-links a.primary:hover { opacity: 0.85; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-wrap">
+  {% if code == 404 %}
+  <div class="error-code">404</div>
+  <div class="error-icon">🔍</div>
+  <div class="error-title">Page Not Found</div>
+  <div class="error-msg">{{ message or "That page doesn't exist or was moved." }}</div>
+  {% elif code == 400 %}
+  <div class="error-code">400</div>
+  <div class="error-icon">⚠️</div>
+  <div class="error-title">Bad Request</div>
+  <div class="error-msg">{{ message or "Something wasn't right about that request." }}</div>
+  {% elif code == 500 %}
+  <div class="error-code">500</div>
+  <div class="error-icon">⚡</div>
+  <div class="error-title">Server Error</div>
+  <div class="error-msg">{{ message or "Something went wrong on our end. Try again in a moment." }}</div>
+  {% else %}
+  <div class="error-icon">⚠️</div>
+  <div class="error-title">{{ title }}</div>
+  <div class="error-msg">{{ message }}</div>
+  {% endif %}
+
+  <div class="error-links">
+    <a href="{{ url_for('web.dashboard') }}" class="primary">← Dashboard</a>
+    <a href="javascript:history.back()">Go Back</a>
+    <a href="{{ url_for('web.transactions') }}">Transactions</a>
+    <a href="{{ url_for('web.chat') }}">Chat</a>
+  </div>
+</div>
+{% endblock %}
